@@ -1,6 +1,5 @@
-//
-//  main.c
-//  readWavFile
+//  HW2 - CS510 - Halfrate
+//  halfrate.c
 //
 //  Created by ehsan on 4/19/22.
 //
@@ -10,10 +9,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-
 #include "bandpass_filter_coeff.h"
 
-// Defines -----------------------------------------------------------------
+// Filescope Defines -----------------------------------------------------------------------------
 #define PI                     (3.14)
 #define SAMPLE_RATE            (48000)          // Sample rate           48kHz
 #define LENGTH                 (1.0)            // Sound length          (1.0) Second
@@ -32,14 +30,16 @@
 #define REKO_FAILED_INIT       (-1)
 #define REKO_FAILED_GENERAL    (-2)
 #define REKO_FAILED_NO_DEVICE  (-3)
-
 // Argument management defines
 #define FINE_NAME_SIZE 74
 
+// Filescope variables -----------------------------------------------------------------
 static char fn_buf[FINE_NAME_SIZE];
 const char * path_to_wav;
 static const char path_sine_wav[]    = "./gc.wav"; // Default path
 static const char * path_r_wav;
+
+// Filescope function prototypes --------------------------------------------------------
 static void mod_file_name(const char in[], char  *const fn_buf, int size);
 static void test_via_buffer_dump(bool, long long, short*);
 static short * half_resampler(short *buf, long long size);
@@ -77,7 +77,6 @@ int main(int argc, const char * argv[]) {
     }
 
     // Read Wav file
-    
     // Local Vars
     SF_INFO sf_info;
     SNDFILE *fp;
@@ -102,27 +101,26 @@ int main(int argc, const char * argv[]) {
     
     
     // Write to a file
-    // Local auto variablesz
+    // Local auto variables
     SF_INFO sfinfo;
-    
     sfinfo.samplerate = (sf_info.samplerate/2);
     sfinfo.frames     =  (sf_info.frames/2);
     sfinfo.channels   =  1;
     sfinfo.format     =  (SF_FORMAT_WAV | SF_FORMAT_PCM_16);
     
-    if(!(fp = sf_open(path_r_wav, SFM_WRITE, &sfinfo))) // TODO
+    if(!(fp = sf_open(path_r_wav, SFM_WRITE, &sfinfo))) // TODO function
         return ( (void)(printf("Error : Couldn't open - .wav \n")), -1 );
     
     if(sf_write_short(fp, intbuf_ptr, sfinfo.channels * (sf_info.frames/2)) != sfinfo.channels * sf_info.frames/2)
         puts(sf_strerror (fp));
-    sf_close(fp); // clipped.wav
+    sf_close(fp);
     
     return 0;
 }
 
 
 
-// Helper functions
+// Helper functions ----------------------------------------------------------
 static void test_via_buffer_dump(bool enable, long long num_frames, short * buf)
 {
     if(enable == true)
@@ -132,7 +130,7 @@ static void test_via_buffer_dump(bool enable, long long num_frames, short * buf)
 }
 
 
-// ----------  Resampler Helper funciton ----------------------------------------------------------
+// Resampler Helper function ----------------------------------------------------------
 static short * half_resampler(short * buf, long long size)
 {
     short * buf_new = (short*) malloc( (size/2)*sizeof(short) );
@@ -150,36 +148,33 @@ static short * half_resampler(short * buf, long long size)
 static void bandPassFilter(short * buf, long long size)
 {
     // Make a VLA Buffer on stack
-    // This allows for easier buffer handling and debugging
+    // This allows for easier buffer padding, handling, and debugging
+    // Will optimize after filter optimization itself
     short ta[size+ NUMBER_OF_COEFFS];
-
     
     for(register int i = 0; i < size+NUMBER_OF_COEFFS; i++)
     {
         if( i < NUMBER_OF_COEFFS)
             ta[i] = 0;
         else
-            ta[i] = buf[i-91];
+            ta[i] = buf[i-NUMBER_OF_COEFFS];
     }
     
     
-    for(register int i = 91; i < size+NUMBER_OF_COEFFS; i++)
+    for(register int i = NUMBER_OF_COEFFS; i < size+NUMBER_OF_COEFFS; i++)
     {
         double y = 0;
         for(int j = 0; j< (sizeof(coeffs)/sizeof(double)); j++)
         {
             y += coeffs[j]*(ta[i-j]);
         }
-        //printf("i: %d y: %f buf=%d ta=%d \n",i,  y, buf[i], ta[i]);
         ta[i-NUMBER_OF_COEFFS] = (short)(y);
     }
     
     for(register int i = 0; i < size; i++)
     {
-        buf[i] = ta[i];
-        //printf("i: %dbuf=%d ta=%d \n",i,  buf[i], ta[i]);
+        buf[i] = ta[i+NUMBER_OF_COEFFS];
     }
-    
     
 }
 
@@ -234,3 +229,42 @@ static void mod_file_name(const char in[], char *const fn_buf, int size)
     }
 }
 
+
+
+// Bandpass Filter with given coffieents todo ----------------------------------------------------------
+static void bandPassFilter_with_better_padding(short * buf, long long size)
+{
+    // Make a VLA Buffer on stack
+    // This allows for easier buffer handling and debugging
+    short ta[size+ NUMBER_OF_COEFFS];
+
+    
+    for(register int i = 0; i < size+NUMBER_OF_COEFFS; i++)
+    {
+        if( i < NUMBER_OF_COEFFS)
+            ta[i] = 0;
+        else
+            ta[i] = buf[i-91];
+    }
+    
+    
+    for(register int i = 91; i < size+NUMBER_OF_COEFFS; i++)
+    {
+        double y = 0;
+        for(int j = 0; j< (sizeof(coeffs)/sizeof(double)); j++)
+        {
+            y += coeffs[j]*(ta[i-j]);
+        }
+        //printf("i: %d y: %f buf=%d ta=%d \n",i,  y, buf[i], ta[i]);
+        ta[i-NUMBER_OF_COEFFS] = (short)(y);
+    }
+    
+    for(register int i = 0; i < size; i++)
+    {
+        buf[i] = ta[i];
+        //printf("i: %dbuf=%d ta=%d \n",i,  buf[i], ta[i]);
+    }
+    
+    //printf("Size of buf: %d, ta:%d \n", (int)size, (int)(sizeof(ta)/sizeof(ta[0]) );
+    
+}
